@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width initial-scale=1" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  
+
+  <title>Don't break me</title>
+  <meta name="description" content="The challenge
+
+
+  
+    
+       
+       
+    
+  
+  
+    
+      Event
+      AUCTF 2020
+    
+    
+      Challenge name
+      Don't Break Me!
+    
+    
+      Challenge category
+      Reversing
+    
+    
+      Challenge points
+      763
+    
+    
+      Executable
+      dont_break_me
+    
+  
+
+
+What does the executable do?
+The executable asks for an input.
+
+user@pc:~$ ./dont_break_me 
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: DUMMYINPUT
+Not quite
+
+Don’t worry about all those numbers, we don’t really need them to complete the challenge.
+So, our input is passed as an argument to sym.encrypt, then the encrypted string returned by the function
+is compared with sym.imp.strcmp to an hardcoded key and if they are equal, it prints the flag.
+We can see this flow through the radare2’s output.
+
+│           0x000012f8      e853fdffff     call sym.imp.fgets 
+│ ... skiping
+│           0x00001321      50             push eax
+│           0x00001322      e8a8010000     call sym.encrypt
+│ ... skiping
+│           0x00001350      ff75ec         push dword [s2]
+│           0x00001353      ff75e8         push dword [s1]
+│           0x00001356      e8d5fcffff     call sym.imp.strcmp 
+│           0x0000135e      85c0           test eax, eax
+│       ┌─&lt; 0x00001360      7507           jne 0x1369
+│       │   0x00001362      e889000000     call sym.print_flag
+
+What can we do?
+
+It seems that all we have to do is reverse the sym.encrypt function, so we can finally provide the
+correct input and get the flag.
+Unfortunately as we can see from the Official writeup, there are some antidebugging techniques, so the debug would be a litte tricky.
+
+But luckly, looking at the ltrace output, we can see the hardcoded key compared to our encrypted input.
+user@kvm:~$ ltrace ./dont_break_me 
+printf("Input: "Input: ) = 7
+fgets( DUMMYINPUT
+"DUMMYINPUT\n", 8192, 0xf7f4b5c0)
+    ... skiping
+strcmp("SASRRWSXBIEBCMPX", "LOIIESZHOX")
+printf("Not quite"Not quite)
+
+So the key is "SASRRWSXBIEBCMPX" and "DUMMYINPUT" apparently becomes "LOIIESZHOX".
+Now, we can try to input all printable ascii characters for each position of the key,
+see what our input char becomes, and then compare it to that of the key until we get the right one.
+Here is the ugly script xD..
+
+import re
+import string
+from pwn import *
+
+secret = ''
+
+for index in range(16):
+	for guess in string.printable:
+		p = process('ltrace ./dont_break_me', shell=True)
+		data = p.recvuntil('fgets(')
+		p.sendline(guess)
+		data = p.recvuntil('(status 0) +++')
+		line = re.findall(r'strcmp.*', data)
+
+		try:
+			key, ch = re.findall(r'"[A-Z]+"|"[A-Z]"', line[0])
+		except:
+			p.close()
+			continue
+
+		key = key.replace('"','')
+		ch = ch.replace('"','')
+
+
+		if ch == key[index]:
+			secret += guess
+			p.close()
+			break			
+
+		p.close()
+		
+log.info(secret)
+
+
+After a long and ugly output, we get the key (c1cffqcnbgsbyuln)
+So the last step would be:
+user@pc:~$ nc challenges.auctf.com 30005
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: c1cffqcnbgsbyuln
+
+auctf{static_or_dyn@mIc?_12923}
+
+Thanks for reading! :D
+
+">
+  <meta name="author" content="Giacomo Iengo">
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Don't break me">
+  <meta name="twitter:description" content="The challenge
+
+
+  
+    
+       
+       
+    
+  
+  
+    
+      Event
+      AUCTF 2020
+    
+    
+      Challenge name
+      Don't Break Me!
+    
+    
+      Challenge category
+      Reversing
+    
+    
+      Challenge points
+      763
+    
+    
+      Executable
+      dont_break_me
+    
+  
+
+
+What does the executable do?
+The executable asks for an input.
+
+user@pc:~$ ./dont_break_me 
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: DUMMYINPUT
+Not quite
+
+Don’t worry about all those numbers, we don’t really need them to complete the challenge.
+So, our input is passed as an argument to sym.encrypt, then the encrypted string returned by the function
+is compared with sym.imp.strcmp to an hardcoded key and if they are equal, it prints the flag.
+We can see this flow through the radare2’s output.
+
+│           0x000012f8      e853fdffff     call sym.imp.fgets 
+│ ... skiping
+│           0x00001321      50             push eax
+│           0x00001322      e8a8010000     call sym.encrypt
+│ ... skiping
+│           0x00001350      ff75ec         push dword [s2]
+│           0x00001353      ff75e8         push dword [s1]
+│           0x00001356      e8d5fcffff     call sym.imp.strcmp 
+│           0x0000135e      85c0           test eax, eax
+│       ┌─&lt; 0x00001360      7507           jne 0x1369
+│       │   0x00001362      e889000000     call sym.print_flag
+
+What can we do?
+
+It seems that all we have to do is reverse the sym.encrypt function, so we can finally provide the
+correct input and get the flag.
+Unfortunately as we can see from the Official writeup, there are some antidebugging techniques, so the debug would be a litte tricky.
+
+But luckly, looking at the ltrace output, we can see the hardcoded key compared to our encrypted input.
+user@kvm:~$ ltrace ./dont_break_me 
+printf("Input: "Input: ) = 7
+fgets( DUMMYINPUT
+"DUMMYINPUT\n", 8192, 0xf7f4b5c0)
+    ... skiping
+strcmp("SASRRWSXBIEBCMPX", "LOIIESZHOX")
+printf("Not quite"Not quite)
+
+So the key is "SASRRWSXBIEBCMPX" and "DUMMYINPUT" apparently becomes "LOIIESZHOX".
+Now, we can try to input all printable ascii characters for each position of the key,
+see what our input char becomes, and then compare it to that of the key until we get the right one.
+Here is the ugly script xD..
+
+import re
+import string
+from pwn import *
+
+secret = ''
+
+for index in range(16):
+	for guess in string.printable:
+		p = process('ltrace ./dont_break_me', shell=True)
+		data = p.recvuntil('fgets(')
+		p.sendline(guess)
+		data = p.recvuntil('(status 0) +++')
+		line = re.findall(r'strcmp.*', data)
+
+		try:
+			key, ch = re.findall(r'"[A-Z]+"|"[A-Z]"', line[0])
+		except:
+			p.close()
+			continue
+
+		key = key.replace('"','')
+		ch = ch.replace('"','')
+
+
+		if ch == key[index]:
+			secret += guess
+			p.close()
+			break			
+
+		p.close()
+		
+log.info(secret)
+
+
+After a long and ugly output, we get the key (c1cffqcnbgsbyuln)
+So the last step would be:
+user@pc:~$ nc challenges.auctf.com 30005
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: c1cffqcnbgsbyuln
+
+auctf{static_or_dyn@mIc?_12923}
+
+Thanks for reading! :D
+
+">
+  
+  <meta name="twitter:image" content="/images/favicons/favicon-194x194.png" />
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Don't break me">
+  <meta property="og:description" content="The challenge
+
+
+  
+    
+       
+       
+    
+  
+  
+    
+      Event
+      AUCTF 2020
+    
+    
+      Challenge name
+      Don't Break Me!
+    
+    
+      Challenge category
+      Reversing
+    
+    
+      Challenge points
+      763
+    
+    
+      Executable
+      dont_break_me
+    
+  
+
+
+What does the executable do?
+The executable asks for an input.
+
+user@pc:~$ ./dont_break_me 
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: DUMMYINPUT
+Not quite
+
+Don’t worry about all those numbers, we don’t really need them to complete the challenge.
+So, our input is passed as an argument to sym.encrypt, then the encrypted string returned by the function
+is compared with sym.imp.strcmp to an hardcoded key and if they are equal, it prints the flag.
+We can see this flow through the radare2’s output.
+
+│           0x000012f8      e853fdffff     call sym.imp.fgets 
+│ ... skiping
+│           0x00001321      50             push eax
+│           0x00001322      e8a8010000     call sym.encrypt
+│ ... skiping
+│           0x00001350      ff75ec         push dword [s2]
+│           0x00001353      ff75e8         push dword [s1]
+│           0x00001356      e8d5fcffff     call sym.imp.strcmp 
+│           0x0000135e      85c0           test eax, eax
+│       ┌─&lt; 0x00001360      7507           jne 0x1369
+│       │   0x00001362      e889000000     call sym.print_flag
+
+What can we do?
+
+It seems that all we have to do is reverse the sym.encrypt function, so we can finally provide the
+correct input and get the flag.
+Unfortunately as we can see from the Official writeup, there are some antidebugging techniques, so the debug would be a litte tricky.
+
+But luckly, looking at the ltrace output, we can see the hardcoded key compared to our encrypted input.
+user@kvm:~$ ltrace ./dont_break_me 
+printf("Input: "Input: ) = 7
+fgets( DUMMYINPUT
+"DUMMYINPUT\n", 8192, 0xf7f4b5c0)
+    ... skiping
+strcmp("SASRRWSXBIEBCMPX", "LOIIESZHOX")
+printf("Not quite"Not quite)
+
+So the key is "SASRRWSXBIEBCMPX" and "DUMMYINPUT" apparently becomes "LOIIESZHOX".
+Now, we can try to input all printable ascii characters for each position of the key,
+see what our input char becomes, and then compare it to that of the key until we get the right one.
+Here is the ugly script xD..
+
+import re
+import string
+from pwn import *
+
+secret = ''
+
+for index in range(16):
+	for guess in string.printable:
+		p = process('ltrace ./dont_break_me', shell=True)
+		data = p.recvuntil('fgets(')
+		p.sendline(guess)
+		data = p.recvuntil('(status 0) +++')
+		line = re.findall(r'strcmp.*', data)
+
+		try:
+			key, ch = re.findall(r'"[A-Z]+"|"[A-Z]"', line[0])
+		except:
+			p.close()
+			continue
+
+		key = key.replace('"','')
+		ch = ch.replace('"','')
+
+
+		if ch == key[index]:
+			secret += guess
+			p.close()
+			break			
+
+		p.close()
+		
+log.info(secret)
+
+
+After a long and ugly output, we get the key (c1cffqcnbgsbyuln)
+So the last step would be:
+user@pc:~$ nc challenges.auctf.com 30005
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: c1cffqcnbgsbyuln
+
+auctf{static_or_dyn@mIc?_12923}
+
+Thanks for reading! :D
+
+">
+  <meta property="og:image" content="/images/favicons/favicon-194x194.png" />
+
+  <link rel="apple-touch-icon" sizes="57x57" href="/images/favicons/apple-touch-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="/images/favicons/apple-touch-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="/images/favicons/apple-touch-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="/images/favicons/apple-touch-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="/images/favicons/apple-touch-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="/images/favicons/apple-touch-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="/images/favicons/apple-touch-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/images/favicons/apple-touch-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicons/apple-touch-icon-180x180.png">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-194x194.png" sizes="194x194">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-96x96.png" sizes="96x96">
+  <link rel="icon" type="image/png" href="/images/favicons/android-chrome-192x192.png" sizes="192x192">
+  <link rel="icon" type="image/png" href="/images/favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="manifest" href="/images/favicons/manifest.json">
+  <link rel="shortcut icon" href="/images/favicons/favicon.ico">
+  <meta name="msapplication-TileColor" content="#ffc40d">
+  <meta name="msapplication-TileImage" content="/images/favicons/mstile-144x144.png">
+  <meta name="theme-color" content="#ffffff">
+  
+  <link rel="stylesheet" href="/css/main.css?1587158072564035591">
+  <link rel="canonical" href="http://0.0.0.0:4000/2020/dont-break-me/">
+  <link rel="alternate" type="application/rss+xml" title="Giacomo Iengo" href="/feed.xml">
+</head>
+
+
+  <body>
+    <span class="mobile btn-mobile-menu">
+  <i class="icon icon-list btn-mobile-menu__icon"></i>
+  <i class="icon icon-x-circle btn-mobile-close__icon hidden"></i>
+</span>
+
+<header class="panel-cover" style="background-image: url(/images/cover.jpg)">
+  <div class="panel-main">
+
+    <div class="panel-main__inner panel-inverted">
+    <div class="panel-main__content">
+        <a href="/" title="link to home of Giacomo Iengo">
+          <img src="/images/profile.jpg" class="user-image" alt="My Profile Photo">
+          <h1 class="panel-cover__title panel-title">Giacomo Iengo</h1>
+        </a>
+        <hr class="panel-cover__divider">
+        <p class="panel-cover__description">Hi, I'm Giacomo and i really like diving in things that inspire me. Unfortunately, they often become obsessions.. haha</p>
+        <hr class="panel-cover__divider panel-cover__divider--secondary">
+
+        <div class="navigation-wrapper">
+
+          <nav class="cover-navigation cover-navigation--primary">
+            <ul class="navigation">
+              <li class="navigation__item"><a href="/#posts" title="link to Giacomo Iengo blog" class="blog-button">Posts</a></li>
+              <li class="navigation__item"><a href="/tags" title="link to Giacomo Iengo blog" class="blog-button">Tags</a></li>
+              <li class="navigation__item"><a href="/categories" title="link to Giacomo Iengo blog" class="blog-button">Categories</a></li>
+              <li class="navigation__item"><a href="/about" title="link to Giacomo Iengo blog" class="blog-button">About Me</a></li>
+            </ul>
+          </nav>
+			<br>
+          <nav class="cover-navigation navigation--social">
+            <ul class="navigation">
+
+            
+
+            
+
+            
+
+            
+              <!-- GitHub -->
+              <li class="navigation__item">
+                <a href="https://www.github.com/giacomoiengo" title="giacomoiengo on GitHub" target="_blank">
+                  <i class="icon icon-social-github"></i>
+                  <span class="label">GitHub</span>
+                </a>
+              </li>
+            
+
+            
+              <!-- Email -->
+              <li class="navigation__item">
+                <a href="mailto:g.iengo@protonmail.com" title="Email g.iengo@protonmail.com" target="_blank">
+                  <i class="icon icon-mail"></i>
+                  <span class="label">Email</span>
+                </a>
+              </li>
+            
+
+            <!-- RSS -->
+            <!--
+			<li class="navigation__item">
+              <a href="/feed.xml" title="Subscribe" target="_blank">
+                <i class="icon icon-rss"></i>
+                <span class="label">RSS</span>
+              </a>
+            </li>
+			-->
+            </ul>
+          </nav>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="panel-cover--overlay"></div>
+  </div>
+</header>
+
+
+    <div class="content-wrapper">
+      <div class="content-wrapper__inner">
+        <article class="post-container post-container--single">
+  <header class="post-header">
+    <div class="post-meta">
+      <time datetime="2020-04-11 00:00" class="post-meta__date date">11 Apr 2020</time>
+      
+      &#8226; <span class="post-meta__tags">on <a href="/categories/#Writeups">Writeups</a></span>
+      
+      
+      &#8226; <span class="post-meta__tags">Tags: <a href="/tags/#Reversing">Reversing</a>, <a href="/tags/#Ctf">Ctf</a></span>
+      
+    </div>
+    <h1 class="post-title">Don't break me</h1>
+  </header>
+
+  <section class="post">
+    <h2 id="the-challenge">The challenge</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th> </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Event</td>
+      <td><code class="language-plaintext highlighter-rouge">AUCTF 2020</code></td>
+    </tr>
+    <tr>
+      <td>Challenge name</td>
+      <td><code class="language-plaintext highlighter-rouge">Don't Break Me!</code></td>
+    </tr>
+    <tr>
+      <td>Challenge category</td>
+      <td><code class="language-plaintext highlighter-rouge">Reversing</code></td>
+    </tr>
+    <tr>
+      <td>Challenge points</td>
+      <td><code class="language-plaintext highlighter-rouge">763</code></td>
+    </tr>
+    <tr>
+      <td>Executable</td>
+      <td><a href="https://github.com/auehc/AUCTF-2020/raw/master/Reversing/Don't%20Break%20Me!/dont_break_me">dont_break_me</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="what-does-the-executable-do">What does the executable do?</h2>
+<p>The executable asks for an <code class="language-plaintext highlighter-rouge">input</code>.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>user@pc:~$ ./dont_break_me 
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: DUMMYINPUT
+Not quite
+</code></pre></div></div>
+<p>Don’t worry about all those <strong>numbers</strong>, we don’t really need them to complete the challenge.
+So, our <code class="language-plaintext highlighter-rouge">input</code> is passed as an argument to <strong>sym.encrypt</strong>, then the encrypted string returned by the function
+is compared with <strong>sym.imp.strcmp</strong> to an hardcoded <code class="language-plaintext highlighter-rouge">key</code> and if they are equal, it prints the <code class="language-plaintext highlighter-rouge">flag</code>.
+We can see this flow through the <code class="language-plaintext highlighter-rouge">radare2</code>’s output.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>│           0x000012f8      e853fdffff     call sym.imp.fgets 
+│ ... skiping
+│           0x00001321      50             push eax
+│           0x00001322      e8a8010000     call sym.encrypt
+│ ... skiping
+│           0x00001350      ff75ec         push dword [s2]
+│           0x00001353      ff75e8         push dword [s1]
+│           0x00001356      e8d5fcffff     call sym.imp.strcmp 
+│           0x0000135e      85c0           test eax, eax
+│       ┌─&lt; 0x00001360      7507           jne 0x1369
+│       │   0x00001362      e889000000     call sym.print_flag
+</code></pre></div></div>
+<h2 id="what-can-we-do">What can we do?</h2>
+
+<p>It seems that all we have to do is reverse the <code class="language-plaintext highlighter-rouge">sym.encrypt</code> function, so we can finally provide the
+correct input and get the <code class="language-plaintext highlighter-rouge">flag</code>.
+Unfortunately as we can see from the <a href="https://github.com/auehc/AUCTF-2020/blob/master/Reversing/Don't%20Break%20Me!/Solution/writeup.md">Official writeup</a>, there are some <strong>antidebugging techniques</strong>, so the debug would be a litte tricky.</p>
+
+<p>But luckly, looking at the <code class="language-plaintext highlighter-rouge">ltrace</code> output, we can see the hardcoded <code class="language-plaintext highlighter-rouge">key</code> compared to our <code class="language-plaintext highlighter-rouge">encrypted input</code>.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>user@kvm:~$ ltrace ./dont_break_me 
+printf("Input: "Input: ) = 7
+fgets( DUMMYINPUT
+"DUMMYINPUT\n", 8192, 0xf7f4b5c0)
+    ... skiping
+strcmp("SASRRWSXBIEBCMPX", "LOIIESZHOX")
+printf("Not quite"Not quite)
+</code></pre></div></div>
+<p>So the key is <code class="language-plaintext highlighter-rouge">"SASRRWSXBIEBCMPX"</code> and <code class="language-plaintext highlighter-rouge">"DUMMYINPUT"</code> apparently becomes <code class="language-plaintext highlighter-rouge">"LOIIESZHOX"</code>.
+Now, we can try to input <strong>all printable ascii characters</strong> for each position of the key,
+see what our input char becomes, and then compare it to that of the key until we get the right one.
+Here is the ugly script xD..</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">from</span> <span class="nn">pwn</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">secret</span> <span class="o">=</span> <span class="s">''</span>
+
+<span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
+	<span class="k">for</span> <span class="n">guess</span> <span class="ow">in</span> <span class="n">string</span><span class="o">.</span><span class="n">printable</span><span class="p">:</span>
+		<span class="n">p</span> <span class="o">=</span> <span class="n">process</span><span class="p">(</span><span class="s">'ltrace ./dont_break_me'</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+		<span class="n">data</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">recvuntil</span><span class="p">(</span><span class="s">'fgets('</span><span class="p">)</span>
+		<span class="n">p</span><span class="o">.</span><span class="n">sendline</span><span class="p">(</span><span class="n">guess</span><span class="p">)</span>
+		<span class="n">data</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">recvuntil</span><span class="p">(</span><span class="s">'(status 0) +++'</span><span class="p">)</span>
+		<span class="n">line</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s">r'strcmp.*'</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+		<span class="k">try</span><span class="p">:</span>
+			<span class="n">key</span><span class="p">,</span> <span class="n">ch</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s">r'"[A-Z]+"|"[A-Z]"'</span><span class="p">,</span> <span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+		<span class="k">except</span><span class="p">:</span>
+			<span class="n">p</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+			<span class="k">continue</span>
+
+		<span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'"'</span><span class="p">,</span><span class="s">''</span><span class="p">)</span>
+		<span class="n">ch</span> <span class="o">=</span> <span class="n">ch</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'"'</span><span class="p">,</span><span class="s">''</span><span class="p">)</span>
+
+
+		<span class="k">if</span> <span class="n">ch</span> <span class="o">==</span> <span class="n">key</span><span class="p">[</span><span class="n">index</span><span class="p">]:</span>
+			<span class="n">secret</span> <span class="o">+=</span> <span class="n">guess</span>
+			<span class="n">p</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+			<span class="k">break</span>			
+
+		<span class="n">p</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+		
+<span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">secret</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>After a long and ugly output, we get the key (<code class="language-plaintext highlighter-rouge">c1cffqcnbgsbyuln</code>)
+So the last step would be:</p>
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>user@pc:~<span class="nv">$ </span>nc challenges.auctf.com 30005
+54 68 65 20 6d 61 6e 20 69 6e 20 62 6c 61 63 6b 20 66 6c 
+65 64 20 61 63 72 6f 73 73 20 74 68 65 20 64 65 73 65 72
+74 2c 20 61 6e 64 20 74 68 65 20 67 75 6e 73 6c 69 6e 67
+65 72 20 66 6f 6c 6c 6f 77 65 64 2e
+Input: c1cffqcnbgsbyuln
+
+auctf<span class="o">{</span>static_or_dyn@mIc?_12923<span class="o">}</span>
+</code></pre></div></div>
+<h3 id="thanks-for-reading-d">Thanks for reading! :D</h3>
+
+
+  </section>
+  
+</article>
+
+
+
+      </div>
+
+      <footer class="footer">
+  <span class="footer__copyright">&copy; 2020 Giacomo Iengo. All rights reserved.</span>
+</footer>
+
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js?1587158072564035591"></script>
+
+
+    </div>
+  </body>
+</html>
